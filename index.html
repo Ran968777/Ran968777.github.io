@@ -145,6 +145,89 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2025/06/11/%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8-%E5%88%86%E7%89%87%E9%94%AE%E4%B8%8E%E5%88%86%E7%89%87%E7%AE%97%E6%B3%95/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Ran">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2025/06/11/%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8-%E5%88%86%E7%89%87%E9%94%AE%E4%B8%8E%E5%88%86%E7%89%87%E7%AE%97%E6%B3%95/" class="post-title-link" itemprop="url">分库分表-分片键与分片算法</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2025-06-11 16:25:34 / 修改时间：16:28:12" itemprop="dateCreated datePublished" datetime="2025-06-11T16:25:34+08:00">2025-06-11</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="分片键与分片算法"><a href="#分片键与分片算法" class="headerlink" title="分片键与分片算法"></a>分片键与分片算法</h1><h2 id="分库分表的分片键的选择？"><a href="#分库分表的分片键的选择？" class="headerlink" title="分库分表的分片键的选择？"></a>分库分表的分片键的选择？</h2><ul>
+<li>使用高频字段</li>
+<li>可以让各分片数据均匀</li>
+<li>尽量保证事务都在同一个分片内</li>
+</ul>
+<p>基因分片：</p>
+<p>在一个电商场景中，使用订单id和买家id查询数据的话。可以采用将买家id部分提取到订单id中。这样就可以让用一个用户的订单都放在一个订单中</p>
+<h2 id="分片算法"><a href="#分片算法" class="headerlink" title="分片算法"></a>分片算法</h2><aside>
+💡根据分片键的值计算出数据应该存放在哪里
+</aside>
+
+<h3 id="哈希分片"><a href="#哈希分片" class="headerlink" title="哈希分片"></a>哈希分片</h3><p>比较简单的算法就是对计算分片键的余数。</p>
+<p>优点：数据比较分散，不会存在某个分片有大量数据，比较均匀</p>
+<p>缺点：分片扩容比较复杂，范围查询不方便</p>
+<h3 id="范围分片（Range）"><a href="#范围分片（Range）" class="headerlink" title="范围分片（Range）"></a>范围分片（Range）</h3><p>可以根据时间的分片，个人觉得比较适用的场景有：在B端场景下，对内部的订单进行按时间分片。因为公司内部经常会按时间维度来考量业务的一些情况</p>
+<p>优点：查询落在单个分片范围时，效率高。易扩容，也支持动态扩容</p>
+<p>缺点：容易热点：若分片键值连续，新数据都会落入同一个分片，造成写热点；热门范围数据容易造成度热点</p>
+<h3 id="配置表分片（config-dict）"><a href="#配置表分片（config-dict）" class="headerlink" title="配置表分片（config_dict）"></a>配置表分片（config_dict）</h3><aside>
+💡直接定义分片和分片键值之间的映射关系，静态分片
+
+</aside>
+
+<p>比如为了满足不同国家对数据存储的要求，需要将数据按国家进行分片，由于国家字段值并不多的，我们可以做简单的映射：中国&#x3D;分片 1、美国&#x3D;分片2、其他&#x3D;分片3。</p>
+<h3 id="参考："><a href="#参考：" class="headerlink" title="参考："></a>参考：</h3><p><a target="_blank" rel="noopener" href="https://shuaifeihao.top/wiki/divide_database_table/index_01_2.html">https://shuaifeihao.top/wiki/divide_database_table&#x2F;index_01_2.html</a></p>
+<p><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/609637884">https://zhuanlan.zhihu.com/p/609637884</a></p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2023/06/28/readme/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -415,6 +498,88 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2023/01/22/mybatis/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Ran">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2023/01/22/mybatis/" class="post-title-link" itemprop="url">mybatis的源码小记（1）</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2023-01-22 21:54:53 / 修改时间：21:54:34" itemprop="dateCreated datePublished" datetime="2023-01-22T21:54:53+08:00">2023-01-22</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="mybatis的源码小记（1）"><a href="#mybatis的源码小记（1）" class="headerlink" title="mybatis的源码小记（1）"></a>mybatis的源码小记（1）</h1><h2 id="对象简介"><a href="#对象简介" class="headerlink" title="对象简介"></a>对象简介</h2><blockquote>
+<p>configuration：一个庞大的全局配置</p>
+</blockquote>
+<blockquote>
+<p>SqlSession：了在数据库执行 SQL 命令所需的所有方法.</p>
+</blockquote>
+<blockquote>
+<p>SqlSessionFactory：构造SqlSession的工厂</p>
+</blockquote>
+<blockquote>
+<p>MapperRegistry：getMapper是从configuration下的mapperRegistry获取的。</p>
+</blockquote>
+<h2 id="执行流程"><a href="#执行流程" class="headerlink" title="执行流程"></a>执行流程</h2><ul>
+<li>从mybatis获取mapper开始</li>
+</ul>
+<p>原始的使用mybatis的方式是首先构建一个SqlSession，接着从SqlSession中获取mapper。最后执行mapper中的方法即可。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">test_SqlSessionFactory</span><span class="params">()</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="comment">// 1. 从SqlSessionFactory中获取SqlSession</span></span><br><span class="line">    <span class="type">SqlSessionFactory</span> <span class="variable">sqlSessionFactory</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SqlSessionFactoryBuilder</span>().build(Resources.getResourceAsReader(<span class="string">&quot;mybatis-config-datasource.xml&quot;</span>));</span><br><span class="line">    <span class="type">SqlSession</span> <span class="variable">sqlSession</span> <span class="operator">=</span> sqlSessionFactory.openSession();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 获取映射器对象</span></span><br><span class="line">    <span class="type">UserDao</span> <span class="variable">userDao</span> <span class="operator">=</span> sqlSession.getMapper(UserDao.class);</span><br><span class="line"></span><br><span class="line">    <span class="type">User</span> <span class="variable">user</span> <span class="operator">=</span> userDao.queryUserInfoById(<span class="number">1L</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>那么从SqlSession中获取的mapper到底是什么呢，接下来就来一探究竟。</p>
+<p>进入DefaultSqlSession（SqlSession的默认实现）的getMapper方法，可以发现最终是进入的configuration下的mapperRegistry.getMapper()</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">MapperRegistry</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> Configuration config;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;Class&lt;?&gt;, MapperProxyFactory&lt;?&gt;&gt; knownMappers = <span class="keyword">new</span> <span class="title class_">HashMap</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">MapperRegistry</span><span class="params">(Configuration config)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.config = config;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> &lt;T&gt; T <span class="title function_">getMapper</span><span class="params">(Class&lt;T&gt; type, SqlSession sqlSession)</span> &#123;</span><br><span class="line">        MapperProxyFactory&lt;T&gt; mapperProxyFactory = (MapperProxyFactory)<span class="built_in">this</span>.knownMappers.get(type);</span><br><span class="line">        <span class="keyword">if</span> (mapperProxyFactory == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Type &quot;</span> + type + <span class="string">&quot; is not known to the MapperRegistry.&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> mapperProxyFactory.newInstance(sqlSession);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception var5) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Error getting mapper instance. Cause: &quot;</span> + var5, var5);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>mapperRegistry中有一个变量叫knownMappers，这里是以mapper的class对象为key，以生成mapper对象（也就是MapperProxy）的工厂为value的一个HashMap。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>一句话总结mybatis获取mapper的过程就是：根据class对象，从mapperRegistry中获取mapper的代理对象，且是每次获取都会创建新的代理对象，这也印证了官网所说mapper的作用域是在方法级别的。</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2023/01/22/mybatis.2/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -497,88 +662,6 @@
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">PreparedStatementHandler</span><br><span class="line">  </span><br><span class="line"><span class="keyword">public</span> &lt;E&gt; List&lt;E&gt; <span class="title function_">query</span><span class="params">(Statement statement, ResultHandler resultHandler)</span> <span class="keyword">throws</span> SQLException &#123;</span><br><span class="line">        <span class="type">PreparedStatement</span> <span class="variable">ps</span> <span class="operator">=</span> (PreparedStatement)statement;</span><br><span class="line">        ps.execute();</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">this</span>.resultSetHandler.handleResultSets(ps);</span><br><span class="line"></span><br></pre></td></tr></table></figure>
 
 <h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>一句话总结mapper的执行流程就是，mapper的代理会去通过sqlSession找到executor来执行对应的sql，然后在通过resultHandler来封装返回的结果集。</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/01/22/mybatis/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="Ran">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/01/22/mybatis/" class="post-title-link" itemprop="url">mybatis的源码小记（1）</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-01-22 21:54:53 / 修改时间：21:54:34" itemprop="dateCreated datePublished" datetime="2023-01-22T21:54:53+08:00">2023-01-22</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <h1 id="mybatis的源码小记（1）"><a href="#mybatis的源码小记（1）" class="headerlink" title="mybatis的源码小记（1）"></a>mybatis的源码小记（1）</h1><h2 id="对象简介"><a href="#对象简介" class="headerlink" title="对象简介"></a>对象简介</h2><blockquote>
-<p>configuration：一个庞大的全局配置</p>
-</blockquote>
-<blockquote>
-<p>SqlSession：了在数据库执行 SQL 命令所需的所有方法.</p>
-</blockquote>
-<blockquote>
-<p>SqlSessionFactory：构造SqlSession的工厂</p>
-</blockquote>
-<blockquote>
-<p>MapperRegistry：getMapper是从configuration下的mapperRegistry获取的。</p>
-</blockquote>
-<h2 id="执行流程"><a href="#执行流程" class="headerlink" title="执行流程"></a>执行流程</h2><ul>
-<li>从mybatis获取mapper开始</li>
-</ul>
-<p>原始的使用mybatis的方式是首先构建一个SqlSession，接着从SqlSession中获取mapper。最后执行mapper中的方法即可。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">test_SqlSessionFactory</span><span class="params">()</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="comment">// 1. 从SqlSessionFactory中获取SqlSession</span></span><br><span class="line">    <span class="type">SqlSessionFactory</span> <span class="variable">sqlSessionFactory</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SqlSessionFactoryBuilder</span>().build(Resources.getResourceAsReader(<span class="string">&quot;mybatis-config-datasource.xml&quot;</span>));</span><br><span class="line">    <span class="type">SqlSession</span> <span class="variable">sqlSession</span> <span class="operator">=</span> sqlSessionFactory.openSession();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 获取映射器对象</span></span><br><span class="line">    <span class="type">UserDao</span> <span class="variable">userDao</span> <span class="operator">=</span> sqlSession.getMapper(UserDao.class);</span><br><span class="line"></span><br><span class="line">    <span class="type">User</span> <span class="variable">user</span> <span class="operator">=</span> userDao.queryUserInfoById(<span class="number">1L</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>那么从SqlSession中获取的mapper到底是什么呢，接下来就来一探究竟。</p>
-<p>进入DefaultSqlSession（SqlSession的默认实现）的getMapper方法，可以发现最终是进入的configuration下的mapperRegistry.getMapper()</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">MapperRegistry</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> Configuration config;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;Class&lt;?&gt;, MapperProxyFactory&lt;?&gt;&gt; knownMappers = <span class="keyword">new</span> <span class="title class_">HashMap</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">MapperRegistry</span><span class="params">(Configuration config)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.config = config;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> &lt;T&gt; T <span class="title function_">getMapper</span><span class="params">(Class&lt;T&gt; type, SqlSession sqlSession)</span> &#123;</span><br><span class="line">        MapperProxyFactory&lt;T&gt; mapperProxyFactory = (MapperProxyFactory)<span class="built_in">this</span>.knownMappers.get(type);</span><br><span class="line">        <span class="keyword">if</span> (mapperProxyFactory == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Type &quot;</span> + type + <span class="string">&quot; is not known to the MapperRegistry.&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> mapperProxyFactory.newInstance(sqlSession);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception var5) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Error getting mapper instance. Cause: &quot;</span> + var5, var5);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>mapperRegistry中有一个变量叫knownMappers，这里是以mapper的class对象为key，以生成mapper对象（也就是MapperProxy）的工厂为value的一个HashMap。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>一句话总结mybatis获取mapper的过程就是：根据class对象，从mapperRegistry中获取mapper的代理对象，且是每次获取都会创建新的代理对象，这也印证了官网所说mapper的作用域是在方法级别的。</p>
 
       
     </div>
@@ -818,12 +901,12 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">7</span>
+          <span class="site-state-item-count">8</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
       <div class="site-state-item site-state-tags">
-        <span class="site-state-item-count">5</span>
+        <span class="site-state-item-count">6</span>
         <span class="site-state-item-name">标签</span>
       </div>
   </nav>
@@ -850,7 +933,7 @@
 <div class="copyright">
   
   &copy; 
-  <span itemprop="copyrightYear">2023</span>
+  <span itemprop="copyrightYear">2025</span>
   <span class="with-love">
     <i class="fa fa-heart"></i>
   </span>
