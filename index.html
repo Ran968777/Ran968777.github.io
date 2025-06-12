@@ -145,6 +145,196 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2025/06/12/%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8%E5%90%8E%E7%9A%84%E6%9F%A5%E8%AF%A2/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Ran">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2025/06/12/%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8%E5%90%8E%E7%9A%84%E6%9F%A5%E8%AF%A2/" class="post-title-link" itemprop="url">分库分表后的查询</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2025-06-12 14:16:31 / 修改时间：14:17:31" itemprop="dateCreated datePublished" datetime="2025-06-12T14:16:31+08:00">2025-06-12</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="分库分表后查询的问题"><a href="#分库分表后查询的问题" class="headerlink" title="分库分表后查询的问题"></a>分库分表后查询的问题</h1><p>分库分表后，查询需要跨库or跨表，怎么做呢</p>
+<p>比如存在两个库db0, db1 ，两个库中都有order表，数据根据order_id 模2判定存在于哪个库</p>
+<p>db0 中的数据: 2, 4 ,6 ,8</p>
+<p>db1 中的数据: 1, 3, 5 ,7</p>
+<p>假设现在需要查询。pageSize 为 2， pageNo 为2的数据，上帝视角来看，数据是1,2,3,4,5,6,7,8。 所以最后的结果应该是order_id为 3,4的数据。</p>
+<h3 id="全局视野"><a href="#全局视野" class="headerlink" title="全局视野"></a>全局视野</h3><aside>
+💡从不同的节点中获取数据，然后在内存中做处理
+</aside>
+
+<p>缺点： </p>
+<ul>
+<li>每个节点会返回更多的数据</li>
+<li>随着页码的增大，性能会下降</li>
+</ul>
+<p>传统结构下，只需要这样查询即可达成要求</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> `<span class="keyword">order</span>` <span class="keyword">order</span> <span class="keyword">by</span> order_id limit <span class="number">2</span> <span class="keyword">offset</span> <span class="number">2</span></span><br></pre></td></tr></table></figure>
+
+<p>在上面分库分表的场景下：这条 sql 会取到 db0 中的 6,8 和 db1 中的5,7 。这样的结果集及时经过处理也无法获得正确的结果，所以需要改写sql 为</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> `<span class="keyword">order</span>` <span class="keyword">order</span> <span class="keyword">by</span> order_id limit <span class="number">4</span> <span class="keyword">offset</span> <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<p>分别获取 db0 , db1 中的前4条数据，然后再到内存中处理。</p>
+<h2 id="后续页查询"><a href="#后续页查询" class="headerlink" title="后续页查询"></a>后续页查询</h2><aside>
+💡用上一页的max_order_id 做为起点，取后续的n条记录。
+</aside>
+
+<p>缺点：不支持随机跳页</p>
+<p>比如第一页的max_order_id是2。第二页的查询sql如下</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> `<span class="keyword">order</span>` <span class="keyword">where</span> order_id <span class="operator">&gt;</span> <span class="number">2</span> <span class="keyword">order</span> <span class="keyword">by</span> order_id limit <span class="number">2</span></span><br></pre></td></tr></table></figure>
+
+<p>在 db0 和 db1 中分别执行此sql 就会获取到 【4,6】 和【3,5】的数据。然后再到内存中做分页，也能获取到正确的结果</p>
+<h3 id="二次查询"><a href="#二次查询" class="headerlink" title="二次查询"></a>二次查询</h3><p>步骤如下：</p>
+<p>（1）SQL改写，将 order by time offset X limit Y; 改写成 order by time offset X&#x2F;N limit Y;</p>
+<p>（2）多页返回，找到最小值time_min，分页记录的时间一定大于等于time_min（核心逻辑）；</p>
+<p>（3）between二次查询 order by time between $time_min and $time_i_max;</p>
+<p>（4）设置虚拟time_min，找到time_min在各个分库的offset，从而得到time_min在全局的offset；</p>
+<p>（5）得到了time_min在全局的offset，自然得到了全局的 offset X limit Y；</p>
+<aside>
+💡这种方法的核心思想是，通过一个“粗略”的第一次查询，找到一个时间范围（或类似的排序字段范围），然后在这个范围内进行第二次“精确”的查询，以定位到真正需要的数据。
+
+<p>因为分页的本质是跳过前 X 条记录，而 time_min 正是那个“第 X 条记录”的时间值，知道了它在排序中的位置，就能精准分页。</p>
+<p>缺点：查询比较复杂，需要二次查询</p>
+</aside>
+
+<p>改写sql：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">x为 <span class="number">2</span>，limit <span class="number">2</span> ,n 也是<span class="number">2</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">select</span> <span class="operator">*</span> <span class="keyword">from</span> `<span class="keyword">order</span>` <span class="keyword">order</span> <span class="keyword">by</span> order_id limit <span class="number">2</span> <span class="keyword">offset</span> <span class="number">1</span>;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<p>在db0 查询到的结果是：【4,6】，在db1 查询到的结果是【3,5】</p>
+<p>得到min_order_id 为3 。再执行一次between min_order_id and max_id后，结果与第一次一致。</p>
+<p>此时估算order_id为3的数据在全局的offset为 1 (第一个语句中的offset 1) + 1 (第二个语句中的offst 也是1) &#x3D; 2。</p>
+<p>所以order_id 的全局offset为2。在传统单表的情况下也需要offset 2 ,limit 2的数据。所以在【4,6】和【3,5】合并后再排序，从3开始取数，再取两个位置即可，最后的结果就是【3,4】。</p>
+<p>第(4)步找到time_min的全局offset比较难，看了很久才理明白。</p>
+<p>可以参考：</p>
+<p><a target="_blank" rel="noopener" href="https://blog.healerjean.com/database/2019/09/11/1_%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8%E8%A7%A3%E9%87%8A%E4%BB%A5%E5%8F%8A%E9%97%AE%E9%A2%98%E5%87%BA%E7%8E%B0/#23%E5%88%86%E7%BB%84-%E6%9F%A5%E5%87%BA%E6%9D%A5%E5%86%8D%E8%AE%A1%E7%AE%97"><em>https://blog.healerjean.com/database/2019/09/11/1_分库分表解释以及问题出现&#x2F;#23分组-查出来再计算</em></a></p>
+<p><a target="_blank" rel="noopener" href="https://juejin.cn/post/7141194628472487972#heading-9"><em>https://juejin.cn/post/7141194628472487972#heading-9</em></a></p>
+<p>一些理解，上述的方法感觉不是很方便。理解成本也很高。对于读多写少的系统来说。还是可以考虑使用类似es这类的中间件来做复杂的查询。</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2025/06/12/%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8%E7%9A%84%E5%B0%8F%E5%AE%9E%E6%88%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Ran">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2025/06/12/%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8%E7%9A%84%E5%B0%8F%E5%AE%9E%E6%88%98/" class="post-title-link" itemprop="url">分库分表的小实战</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2025-06-12 14:14:14 / 修改时间：14:16:12" itemprop="dateCreated datePublished" datetime="2025-06-12T14:14:14+08:00">2025-06-12</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="分库分表"><a href="#分库分表" class="headerlink" title="分库分表"></a>分库分表</h1><h2 id="✅-一、业务场景设定"><a href="#✅-一、业务场景设定" class="headerlink" title="✅ 一、业务场景设定"></a>✅ 一、业务场景设定</h2><p>假设你有一个电商订单系统，需要将订单数据进行分库分表。</p>
+<ul>
+<li>数据库：2 个（<code>order_db_0</code>, <code>order_db_1</code>）</li>
+<li>表：每个库中 2 个分表（<code>t_order_0</code>, <code>t_order_1</code>）</li>
+<li>路由规则：<code>user_id % 2</code> 决定库，<code>order_id % 2</code> 决定表（分库、分表的决策。这是一个可以扩展的点）</li>
+</ul>
+<h2 id="✅-二、技术选型"><a href="#✅-二、技术选型" class="headerlink" title="✅ 二、技术选型"></a>✅ 二、技术选型</h2><p><strong>数据库</strong>：MySQL 8</p>
+<p><strong>ORM 框架</strong>：MyBatis-Plus 或原生 JDBC</p>
+<p><strong>分片中间件</strong>：ShardingSphere-JDBC</p>
+<h2 id="三、数据库启动"><a href="#三、数据库启动" class="headerlink" title="三、数据库启动"></a>三、数据库启动</h2><p>使用docker-compose启动两个数据库实例</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">version:</span> <span class="string">&#x27;3.8&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="attr">services:</span></span><br><span class="line">  <span class="attr">mysql-db0:</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">mysql:8.0.32</span></span><br><span class="line">    <span class="attr">container_name:</span> <span class="string">mysql-db0</span></span><br><span class="line">    <span class="attr">restart:</span> <span class="string">always</span></span><br><span class="line">    <span class="attr">environment:</span></span><br><span class="line">      <span class="attr">MYSQL_ROOT_PASSWORD:</span> <span class="string">root</span></span><br><span class="line">      <span class="attr">MYSQL_DATABASE:</span> <span class="string">order_db_0</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">&quot;23306:3306&quot;</span></span><br><span class="line">    <span class="attr">volumes:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">./db0/init.sql:/docker-entrypoint-initdb.d/init.sql</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">db0-data:/var/lib/mysql</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">mysql-db1:</span></span><br><span class="line">    <span class="attr">image:</span> <span class="string">mysql:8.0.32</span></span><br><span class="line">    <span class="attr">container_name:</span> <span class="string">mysql-db1</span></span><br><span class="line">    <span class="attr">restart:</span> <span class="string">always</span></span><br><span class="line">    <span class="attr">environment:</span></span><br><span class="line">      <span class="attr">MYSQL_ROOT_PASSWORD:</span> <span class="string">root</span></span><br><span class="line">      <span class="attr">MYSQL_DATABASE:</span> <span class="string">order_db_1</span></span><br><span class="line">    <span class="attr">ports:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">&quot;23307:3306&quot;</span></span><br><span class="line">    <span class="attr">volumes:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">./db1/init.sql:/docker-entrypoint-initdb.d/init.sql</span></span><br><span class="line">      <span class="bullet">-</span> <span class="string">db1-data:/var/lib/mysql</span></span><br><span class="line"></span><br><span class="line"><span class="attr">volumes:</span></span><br><span class="line">  <span class="attr">db0-data:</span></span><br><span class="line">  <span class="attr">db1-data:</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h2 id="核心的yaml配置"><a href="#核心的yaml配置" class="headerlink" title="核心的yaml配置"></a>核心的yaml配置</h2><p>application.yml</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">fen_ku_fen_biao</span></span><br><span class="line">  <span class="attr">datasource:</span></span><br><span class="line">    <span class="attr">driver-class-name:</span> <span class="string">org.apache.shardingsphere.driver.ShardingSphereDriver</span></span><br><span class="line">    <span class="attr">url:</span> <span class="string">jdbc:shardingsphere:classpath:sharding-config.yaml</span></span><br><span class="line">    </span><br><span class="line">    </span><br></pre></td></tr></table></figure>
+
+<p>sharding-config.yaml</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">dataSources:</span></span><br><span class="line">  <span class="attr">ds_0:</span></span><br><span class="line">    <span class="attr">driverClassName:</span> <span class="string">com.mysql.cj.jdbc.Driver</span></span><br><span class="line">    <span class="attr">dataSourceClassName:</span> <span class="string">com.zaxxer.hikari.HikariDataSource</span></span><br><span class="line">    <span class="attr">jdbcUrl:</span> <span class="string">jdbc:mysql://localhost:23306/order_db_0?allowPublicKeyRetrieval=true&amp;serverTimezone=UTC&amp;useSSL=false</span></span><br><span class="line">    <span class="attr">username:</span> <span class="string">root</span></span><br><span class="line">    <span class="attr">password:</span> <span class="string">root</span></span><br><span class="line">  <span class="attr">ds_1:</span></span><br><span class="line">    <span class="attr">driverClassName:</span> <span class="string">com.mysql.cj.jdbc.Driver</span></span><br><span class="line">    <span class="attr">dataSourceClassName:</span> <span class="string">com.zaxxer.hikari.HikariDataSource</span></span><br><span class="line">    <span class="attr">jdbcUrl:</span> <span class="string">jdbc:mysql://localhost:23307/order_db_1?allowPublicKeyRetrieval=true&amp;serverTimezone=UTC&amp;useSSL=false</span></span><br><span class="line">    <span class="attr">username:</span> <span class="string">root</span></span><br><span class="line">    <span class="attr">password:</span> <span class="string">root</span></span><br><span class="line"></span><br><span class="line"><span class="attr">rules:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="type">!SHARDING</span></span><br><span class="line">    <span class="attr">tables:</span></span><br><span class="line">      <span class="attr">t_order:</span></span><br><span class="line">        <span class="attr">actualDataNodes:</span> <span class="string">ds_$&#123;0..1&#125;.t_order_$&#123;0..1&#125;</span></span><br><span class="line">        <span class="attr">databaseStrategy:</span></span><br><span class="line">          <span class="attr">standard:</span></span><br><span class="line">            <span class="attr">shardingColumn:</span> <span class="string">user_id</span></span><br><span class="line">            <span class="attr">shardingAlgorithmName:</span> <span class="string">t_user_inline</span></span><br><span class="line">        <span class="attr">tableStrategy:</span></span><br><span class="line">          <span class="attr">standard:</span></span><br><span class="line">            <span class="attr">shardingColumn:</span> <span class="string">order_id</span></span><br><span class="line">            <span class="attr">shardingAlgorithmName:</span> <span class="string">t_order_inline</span></span><br><span class="line"></span><br><span class="line">    <span class="attr">defaultDatabaseStrategy:</span></span><br><span class="line">      <span class="attr">standard:</span></span><br><span class="line">        <span class="attr">shardingColumn:</span> <span class="string">user_id</span></span><br><span class="line">        <span class="attr">shardingAlgorithmName:</span> <span class="string">default_database_inline</span></span><br><span class="line"></span><br><span class="line">    <span class="attr">shardingAlgorithms:</span></span><br><span class="line">      <span class="attr">default_database_inline:</span></span><br><span class="line">        <span class="attr">type:</span> <span class="string">INLINE</span></span><br><span class="line">        <span class="attr">props:</span></span><br><span class="line">          <span class="attr">algorithm-expression:</span> <span class="string">ds_1</span></span><br><span class="line">      <span class="attr">t_user_inline:</span></span><br><span class="line">        <span class="attr">type:</span>  <span class="string">INLINE</span></span><br><span class="line">        <span class="attr">props:</span></span><br><span class="line">          <span class="attr">algorithm-expression:</span> <span class="string">ds_$&#123;user_id</span> <span class="string">%</span> <span class="number">2</span><span class="string">&#125;</span></span><br><span class="line">      <span class="attr">t_order_inline:</span></span><br><span class="line">        <span class="attr">type:</span>  <span class="string">INLINE</span></span><br><span class="line">        <span class="attr">props:</span></span><br><span class="line">          <span class="attr">algorithm-expression:</span> <span class="string">t_order_$&#123;order_id</span> <span class="string">%</span> <span class="number">2</span><span class="string">&#125;</span></span><br><span class="line"></span><br><span class="line"><span class="attr">props:</span></span><br><span class="line">  <span class="attr">sql-show:</span> <span class="literal">true</span></span><br><span class="line"></span><br></pre></td></tr></table></figure>
+
+<h3 id="代码仓库"><a href="#代码仓库" class="headerlink" title="代码仓库"></a>代码仓库</h3><p><a target="_blank" rel="noopener" href="https://github.com/Ran968777/fen_ku_fen_biao.git">https://github.com/Ran968777/fen_ku_fen_biao.git</a></p>
+<h2 id=""><a href="#" class="headerlink" title=""></a></h2>
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2025/06/11/%E5%88%86%E5%BA%93%E5%88%86%E8%A1%A8-%E5%88%86%E7%89%87%E9%94%AE%E4%B8%8E%E5%88%86%E7%89%87%E7%AE%97%E6%B3%95/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -498,88 +688,6 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
-    <link itemprop="mainEntityOfPage" href="http://example.com/2023/01/22/mybatis/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.gif">
-      <meta itemprop="name" content="Ran">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="Hexo">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2023/01/22/mybatis/" class="post-title-link" itemprop="url">mybatis的源码小记（1）</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">发表于</span>
-              
-
-              <time title="创建时间：2023-01-22 21:54:53 / 修改时间：21:54:34" itemprop="dateCreated datePublished" datetime="2023-01-22T21:54:53+08:00">2023-01-22</time>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <h1 id="mybatis的源码小记（1）"><a href="#mybatis的源码小记（1）" class="headerlink" title="mybatis的源码小记（1）"></a>mybatis的源码小记（1）</h1><h2 id="对象简介"><a href="#对象简介" class="headerlink" title="对象简介"></a>对象简介</h2><blockquote>
-<p>configuration：一个庞大的全局配置</p>
-</blockquote>
-<blockquote>
-<p>SqlSession：了在数据库执行 SQL 命令所需的所有方法.</p>
-</blockquote>
-<blockquote>
-<p>SqlSessionFactory：构造SqlSession的工厂</p>
-</blockquote>
-<blockquote>
-<p>MapperRegistry：getMapper是从configuration下的mapperRegistry获取的。</p>
-</blockquote>
-<h2 id="执行流程"><a href="#执行流程" class="headerlink" title="执行流程"></a>执行流程</h2><ul>
-<li>从mybatis获取mapper开始</li>
-</ul>
-<p>原始的使用mybatis的方式是首先构建一个SqlSession，接着从SqlSession中获取mapper。最后执行mapper中的方法即可。</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">test_SqlSessionFactory</span><span class="params">()</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="comment">// 1. 从SqlSessionFactory中获取SqlSession</span></span><br><span class="line">    <span class="type">SqlSessionFactory</span> <span class="variable">sqlSessionFactory</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SqlSessionFactoryBuilder</span>().build(Resources.getResourceAsReader(<span class="string">&quot;mybatis-config-datasource.xml&quot;</span>));</span><br><span class="line">    <span class="type">SqlSession</span> <span class="variable">sqlSession</span> <span class="operator">=</span> sqlSessionFactory.openSession();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 获取映射器对象</span></span><br><span class="line">    <span class="type">UserDao</span> <span class="variable">userDao</span> <span class="operator">=</span> sqlSession.getMapper(UserDao.class);</span><br><span class="line"></span><br><span class="line">    <span class="type">User</span> <span class="variable">user</span> <span class="operator">=</span> userDao.queryUserInfoById(<span class="number">1L</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>那么从SqlSession中获取的mapper到底是什么呢，接下来就来一探究竟。</p>
-<p>进入DefaultSqlSession（SqlSession的默认实现）的getMapper方法，可以发现最终是进入的configuration下的mapperRegistry.getMapper()</p>
-<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">MapperRegistry</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> Configuration config;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;Class&lt;?&gt;, MapperProxyFactory&lt;?&gt;&gt; knownMappers = <span class="keyword">new</span> <span class="title class_">HashMap</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">MapperRegistry</span><span class="params">(Configuration config)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.config = config;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> &lt;T&gt; T <span class="title function_">getMapper</span><span class="params">(Class&lt;T&gt; type, SqlSession sqlSession)</span> &#123;</span><br><span class="line">        MapperProxyFactory&lt;T&gt; mapperProxyFactory = (MapperProxyFactory)<span class="built_in">this</span>.knownMappers.get(type);</span><br><span class="line">        <span class="keyword">if</span> (mapperProxyFactory == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Type &quot;</span> + type + <span class="string">&quot; is not known to the MapperRegistry.&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> mapperProxyFactory.newInstance(sqlSession);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception var5) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Error getting mapper instance. Cause: &quot;</span> + var5, var5);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-<p>mapperRegistry中有一个变量叫knownMappers，这里是以mapper的class对象为key，以生成mapper对象（也就是MapperProxy）的工厂为value的一个HashMap。</p>
-<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>一句话总结mybatis获取mapper的过程就是：根据class对象，从mapperRegistry中获取mapper的代理对象，且是每次获取都会创建新的代理对象，这也印证了官网所说mapper的作用域是在方法级别的。</p>
-
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
     <link itemprop="mainEntityOfPage" href="http://example.com/2023/01/22/mybatis.2/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
@@ -662,6 +770,88 @@
 <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">PreparedStatementHandler</span><br><span class="line">  </span><br><span class="line"><span class="keyword">public</span> &lt;E&gt; List&lt;E&gt; <span class="title function_">query</span><span class="params">(Statement statement, ResultHandler resultHandler)</span> <span class="keyword">throws</span> SQLException &#123;</span><br><span class="line">        <span class="type">PreparedStatement</span> <span class="variable">ps</span> <span class="operator">=</span> (PreparedStatement)statement;</span><br><span class="line">        ps.execute();</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">this</span>.resultSetHandler.handleResultSets(ps);</span><br><span class="line"></span><br></pre></td></tr></table></figure>
 
 <h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>一句话总结mapper的执行流程就是，mapper的代理会去通过sqlSession找到executor来执行对应的sql，然后在通过resultHandler来封装返回的结果集。</p>
+
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="http://example.com/2023/01/22/mybatis/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.gif">
+      <meta itemprop="name" content="Ran">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Hexo">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2023/01/22/mybatis/" class="post-title-link" itemprop="url">mybatis的源码小记（1）</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">发表于</span>
+              
+
+              <time title="创建时间：2023-01-22 21:54:53 / 修改时间：21:54:34" itemprop="dateCreated datePublished" datetime="2023-01-22T21:54:53+08:00">2023-01-22</time>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <h1 id="mybatis的源码小记（1）"><a href="#mybatis的源码小记（1）" class="headerlink" title="mybatis的源码小记（1）"></a>mybatis的源码小记（1）</h1><h2 id="对象简介"><a href="#对象简介" class="headerlink" title="对象简介"></a>对象简介</h2><blockquote>
+<p>configuration：一个庞大的全局配置</p>
+</blockquote>
+<blockquote>
+<p>SqlSession：了在数据库执行 SQL 命令所需的所有方法.</p>
+</blockquote>
+<blockquote>
+<p>SqlSessionFactory：构造SqlSession的工厂</p>
+</blockquote>
+<blockquote>
+<p>MapperRegistry：getMapper是从configuration下的mapperRegistry获取的。</p>
+</blockquote>
+<h2 id="执行流程"><a href="#执行流程" class="headerlink" title="执行流程"></a>执行流程</h2><ul>
+<li>从mybatis获取mapper开始</li>
+</ul>
+<p>原始的使用mybatis的方式是首先构建一个SqlSession，接着从SqlSession中获取mapper。最后执行mapper中的方法即可。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Test</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">test_SqlSessionFactory</span><span class="params">()</span> <span class="keyword">throws</span> IOException &#123;</span><br><span class="line">    <span class="comment">// 1. 从SqlSessionFactory中获取SqlSession</span></span><br><span class="line">    <span class="type">SqlSessionFactory</span> <span class="variable">sqlSessionFactory</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">SqlSessionFactoryBuilder</span>().build(Resources.getResourceAsReader(<span class="string">&quot;mybatis-config-datasource.xml&quot;</span>));</span><br><span class="line">    <span class="type">SqlSession</span> <span class="variable">sqlSession</span> <span class="operator">=</span> sqlSessionFactory.openSession();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 获取映射器对象</span></span><br><span class="line">    <span class="type">UserDao</span> <span class="variable">userDao</span> <span class="operator">=</span> sqlSession.getMapper(UserDao.class);</span><br><span class="line"></span><br><span class="line">    <span class="type">User</span> <span class="variable">user</span> <span class="operator">=</span> userDao.queryUserInfoById(<span class="number">1L</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>那么从SqlSession中获取的mapper到底是什么呢，接下来就来一探究竟。</p>
+<p>进入DefaultSqlSession（SqlSession的默认实现）的getMapper方法，可以发现最终是进入的configuration下的mapperRegistry.getMapper()</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">MapperRegistry</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> Configuration config;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Map&lt;Class&lt;?&gt;, MapperProxyFactory&lt;?&gt;&gt; knownMappers = <span class="keyword">new</span> <span class="title class_">HashMap</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="title function_">MapperRegistry</span><span class="params">(Configuration config)</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.config = config;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> &lt;T&gt; T <span class="title function_">getMapper</span><span class="params">(Class&lt;T&gt; type, SqlSession sqlSession)</span> &#123;</span><br><span class="line">        MapperProxyFactory&lt;T&gt; mapperProxyFactory = (MapperProxyFactory)<span class="built_in">this</span>.knownMappers.get(type);</span><br><span class="line">        <span class="keyword">if</span> (mapperProxyFactory == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Type &quot;</span> + type + <span class="string">&quot; is not known to the MapperRegistry.&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> mapperProxyFactory.newInstance(sqlSession);</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception var5) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">BindingException</span>(<span class="string">&quot;Error getting mapper instance. Cause: &quot;</span> + var5, var5);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">...</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>mapperRegistry中有一个变量叫knownMappers，这里是以mapper的class对象为key，以生成mapper对象（也就是MapperProxy）的工厂为value的一个HashMap。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>一句话总结mybatis获取mapper的过程就是：根据class对象，从mapperRegistry中获取mapper的代理对象，且是每次获取都会创建新的代理对象，这也印证了官网所说mapper的作用域是在方法级别的。</p>
 
       
     </div>
@@ -901,7 +1091,7 @@
       <div class="site-state-item site-state-posts">
           <a href="/archives/">
         
-          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-count">10</span>
           <span class="site-state-item-name">日志</span>
         </a>
       </div>
